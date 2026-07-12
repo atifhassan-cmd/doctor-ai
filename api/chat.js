@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     parts: [{ text: m.text }],
   }));
 
-  try {
+ try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
       {
@@ -58,12 +58,20 @@ export default async function handler(req, res) {
     );
 
     const data = await response.json();
-    const reply =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "Sorry, couldn't get a response. Please try again.";
+
+    if (!response.ok) {
+      return res.status(200).json({ reply: "DEBUG ERROR: " + (data?.error?.message || JSON.stringify(data)) });
+    }
+
+    const candidate = data?.candidates?.[0];
+    const reply = candidate?.content?.parts?.[0]?.text;
+
+    if (!reply) {
+      return res.status(200).json({ reply: "DEBUG: No text found. Full response: " + JSON.stringify(data).slice(0, 500) });
+    }
 
     return res.status(200).json({ reply });
   } catch (err) {
-    return res.status(500).json({ error: "AI request failed", details: String(err) });
+    return res.status(200).json({ reply: "DEBUG CATCH ERROR: " + String(err) });
   }
 }

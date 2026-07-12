@@ -1,0 +1,6 @@
+{
+  "name": "doctor-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Doctor AI - a friendly health-guidance chatbot (no medicine/dosage advice) with symptom checker, emergency guide, and voice input."
+}

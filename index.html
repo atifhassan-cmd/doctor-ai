@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Doctor AI — Health Guide</title>
+<style>
+  * { box-sizing: border-box; }
+  :root[data-theme="dark"] {
+    --bg:#0b0b0d; --bg2:#0e0e10; --surface:#141416; --card:#18181b; --border:#26262a; --border2:#1c1c1f;
+    --text:#e9e9ea; --muted:#9a9aa0; --muted2:#6b6b70; --accent:#2dd4bf; --accent-text:#062622;
+    --bubble-user:#1f6f63; --bubble-user-text:#f2fffb; --bubble-assistant:#18181b; --bubble-assistant-border:#232326;
+  }
+  :root[data-theme="light"] {
+    --bg:#f5f5f6; --bg2:#ffffff; --surface:#ffffff; --card:#f2f2f3; --border:#e2e2e5; --border2:#ececee;
+    --text:#1c1c1f; --muted:#6b6b70; --muted2:#8c8c90; --accent:#0f9c8a; --accent-text:#ffffff;
+    --bubble-user:#0f9c8a; --bubble-user-text:#ffffff; --bubble-assistant:#f2f2f3; --bubble-assistant-border:#e2e2e5;
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; transition: background .2s ease, color .2s ease; }
+  body { font-size: var(--font-scale, 100%); }
+  #app { display: flex; flex-direction: column; height: 100vh; }
+
+  @keyframes pulseDot { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:.5;transform:scale(1.3);} }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
+  @keyframes typingBounce { 0%,80%,100%{transform:translateY(0);opacity:.4;} 40%{transform:translateY(-4px);opacity:1;} }
+  @keyframes modalIn { from{opacity:0;transform:scale(.96);} to{opacity:1;transform:scale(1);} }
+  @keyframes emPulse { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5);} 50%{box-shadow:0 0 0 6px rgba(239,68,68,0);} }
+  @keyframes toastIn { from{opacity:0;transform:translateY(8px);} to{opacity:1;transform:translateY(0);} }
+  @keyframes breatheIn { 0%,100%{transform:scale(0.6);opacity:.7;} 50%{transform:scale(1.15);opacity:1;} }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px;
+    border-bottom: 1px solid var(--border2); background: var(--bg2); flex-shrink: 0; gap: 10px; flex-wrap: wrap; }
+  .header-left, .header-right { display: flex; align-items: center; gap: 8px; }
+  .logo-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent);
+    animation: pulseDot 2s ease-in-out infinite; display: inline-block; }
+  .logo-text { font-weight: 600; font-size: 16px; margin-left: 8px; }
+  .icon-btn { background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px;
+    width: 32px; height: 32px; cursor: pointer; font-size: 14px; }
+  .icon-btn:hover { background: var(--card); }
+  .pill-btn { font-size: 12px; border-radius: 999px; padding: 6px 10px; cursor: pointer; border: 1px solid; }
+  .checker-btn { color: var(--accent); border-color: var(--accent); background: transparent; }
+  .emergency-btn { color: #fecaca; border-color: #7f1d1d; background: #1a0d0d; animation: emPulse 2.4s ease-in-out infinite; }
+  .tools-btn { color: #c4b5fd; border-color: #5b21b6; background: #1a1233; }
+
+  #chat-area { flex: 1; overflow-y: auto; }
+  #chat-area::-webkit-scrollbar { width: 8px; }
+  #chat-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+  .chat-inner { max-width: 720px; margin: 0 auto; padding: 24px 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .row { display: flex; width: 100%; flex-direction: column; margin-bottom: 10px; }
+  .row.user { align-items: flex-end; }
+  .row.assistant { align-items: flex-start; }
+  .bubble { max-width: 80%; padding: 11px 15px; border-radius: 16px; font-size: 14.5px; line-height: 1.55;
+    white-space: pre-wrap; animation: fadeUp .25s ease; }
+  .bubble-user { background: var(--bubble-user); color: var(--bubble-user-text); border-bottom-right-radius: 4px; }
+  .bubble-assistant { background: var(--bubble-assistant); border: 1px solid var(--bubble-assistant-border); color: var(--text); border-bottom-left-radius: 4px; }
+  .msg-actions { display: flex; gap: 6px; margin-top: 4px; }
+  .msg-actions button { background: transparent; border: none; color: var(--muted2); font-size: 12px; cursor: pointer; padding: 2px 4px; }
+  .msg-actions button:hover { color: var(--accent); }
+  .msg-actions button.rated { color: var(--accent); }
+  .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted2); display: inline-block;
+    animation: typingBounce 1.2s ease-in-out infinite; margin-right: 4px; }
+
+  #input-bar { border-top: 1px solid var(--border2); background: var(--bg2); padding: 12px 16px 16px; flex-shrink: 0; }
+  .input-inner { max-width: 720px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 8px 8px 8px 16px; }
+  textarea#msg-input { flex: 1; background: transparent; border: none; resize: none; color: var(--text);
+    font-size: 14.5px; font-family: inherit; max-height: 120px; padding: 6px 0; }
+  textarea#msg-input:focus { outline: none; }
+  textarea#msg-input::placeholder { color: var(--muted2); }
+  .round-btn { width: 34px; height: 34px; border-radius: 50%; border: none; font-size: 14px; cursor: pointer; flex-shrink: 0; }
+  #mic-btn { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+  #mic-btn.active { background: #7f1d1d; border-color: #ef4444; color: #fff; }
+  #send-btn { background: var(--accent); color: var(--accent-text); transition: opacity .15s ease; }
+  #send-btn:hover:not(:disabled) { opacity: .85; }
+  #send-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .disclaimer { max-width: 720px; margin: 8px auto 0; font-size: 11px; color: var(--muted2); text-align: center; }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 50; }
+  .overlay.open { display: flex; }
+  #sidebar { width: 260px; height: 100%; background: var(--bg2); border-right: 1px solid var(--border2); padding: 14px;
+    display: flex; flex-direction: column; gap: 10px; }
+  #new-chat-btn { background: var(--bubble-user); color: var(--bubble-user-text); border: none; border-radius: 10px; padding: 10px 12px;
+    font-size: 13px; font-weight: 600; cursor: pointer; }
+  #session-list { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+  .session-item { padding: 9px 10px; border-radius: 8px; font-size: 13px; color: var(--muted); cursor: pointer;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session-item:hover, .session-item.active { background: var(--card); color: var(--text); }
+
+  .modal { margin: auto; width: 90%; max-width: 560px; max-height: 82vh; overflow-y: auto; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 16px; padding: 18px; animation: modalIn .18s ease; color: var(--text); }
+  .modal.small { max-width: 440px; }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .modal-header span { font-weight: 700; font-size: 16px; }
+  .close-btn { background: transparent; border: none; color: var(--muted); font-size: 16px; cursor: pointer; }
+  .modal-note { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-bottom: 14px; }
+  .em-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .em-title { font-weight: 700; font-size: 13.5px; color: #e35555; margin-bottom: 6px; }
+  .em-steps { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; color: var(--text); }
+
+  .checker-label { font-size: 13px; color: var(--muted); margin: 4px 0; }
+  .chip-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .chip { padding: 8px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--border);
+    font-size: 13px; color: var(--text); cursor: pointer; transition: all .15s ease; }
+  .chip:hover { background: var(--bubble-user); color: var(--bubble-user-text); }
+  .chip.active { background: var(--bubble-user); color: var(--bubble-user-text); border-color: var(--bubble-user); }
+  #checker-notes { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); padding: 10px; font-family: inherit; font-size: 13px; resize: vertical; margin-top: 6px; }
+  #checker-submit { margin-top: 10px; background: var(--accent); color: var(--accent-text); border: none; border-radius: 10px;
+    padding: 10px 14px; font-weight: 600; font-size: 13px; cursor: pointer; }
+
+  .settings-section { margin-bottom: 18px; }
+  .settings-label { font-size: 12.5px; color: var(--muted); font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .03em; }
+  .settings-input { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); padding: 10px 12px; font-family: inherit; font-size: 13.5px; }
+  .theme-toggle, .row-toggle { display: flex; gap: 8px; }
+  .theme-opt { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--card);
+    text-align: center; cursor: pointer; font-size: 13px; color: var(--text); }
+  .theme-opt.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .memory-item { display: flex; align-items: center; justify-content: space-between; background: var(--card);
+    border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; font-size: 13px; margin-bottom: 6px; }
+  .memory-item button { background: transparent; border: none; color: var(--muted2); cursor: pointer; font-size: 14px; }
+  .memory-item button:hover { color: #ef4444; }
+  .memory-add-row { display: flex; gap: 8px; margin-top: 8px; }
+  .memory-add-row input { flex: 1; }
+  .danger-btn { background: transparent; border: 1px solid #7f1d1d; color: #fca5a5; border-radius: 10px;
+    padding: 9px 14px; font-size: 13px; cursor: pointer; width: 100%; }
+  .danger-btn:hover { background: #1a0d0d; }
+  .small-btn { background: var(--accent); color: var(--accent-text); border: none; border-radius: 10px;
+    padding: 9px 14px; font-size: 13px; cursor: pointer; font-weight: 600; }
+
+  #toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: var(--card);
+    border: 1px solid var(--border); color: var(--text); padding: 9px 16px; border-radius: 999px; font-size: 12.5px;
+    z-index: 100; display: none; animation: toastIn .2s ease; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+
+  .tip-banner { max-width: 720px; margin: 12px auto 0; background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 14px; font-size: 12.5px; color: var(--muted); display: flex;
+    align-items: center; gap: 10px; }
+  .tip-banner .tip-close { margin-left: auto; background: transparent; border: none; color: var(--muted2);
+    cursor: pointer; font-size: 13px; }
+  .quick-topics { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+  .quick-topic { padding: 9px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--border);
+    font-size: 12.5px; color: var(--text); cursor: pointer; transition: all .15s ease; }
+  .quick-topic:hover { background: var(--bubble-user); color: var(--bubble-user-text); }
+  .msg-time { font-size: 10.5px; color: var(--muted2); margin-top: 3px; padding: 0 4px; }
+
+  .tools-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .tool-tile { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+    cursor: pointer; text-align: center; transition: all .15s ease; }
+  .tool-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .tool-tile .tool-icon { font-size: 22px; display: block; margin-bottom: 6px; }
+  .tool-tile .tool-name { font-size: 12px; color: var(--text); }
+
+  .calc-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .calc-row input { flex: 1; }
+  .result-box { background: var(--card); border: 1px solid var(--accent); border-radius: 10px; padding: 14px;
+    text-align: center; margin-top: 12px; }
+  .result-box .big { font-size: 26px; font-weight: 700; color: var(--accent); }
+
+  .water-glasses { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 16px 0; }
+  .glass { font-size: 26px; opacity: .25; cursor: pointer; transition: opacity .15s ease; }
+  .glass.filled { opacity: 1; }
+  .water-count { text-align: center; font-size: 14px; color: var(--muted); }
+
+  .mood-row { display: flex; justify-content: space-between; margin: 10px 0 16px; }
+  .mood-opt { font-size: 30px; cursor: pointer; opacity: .4; transition: all .15s ease; border-radius: 10px; padding: 6px; }
+  .mood-opt:hover, .mood-opt.selected { opacity: 1; background: var(--card); }
+  .mood-log { font-size: 12.5px; color: var(--muted); max-height: 140px; overflow-y: auto; }
+  .mood-log-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border2); }
+
+  .breathe-wrap { display: flex; flex-direction: column; align-items: center; padding: 20px 0; }
+  .breathe-circle { width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle, var(--accent), transparent);
+    animation: breatheIn 8s ease-in-out infinite; display: flex; align-items: center; justify-content: center; }
+  .breathe-text { margin-top: 20px; font-size: 13px; color: var(--muted); text-align: center; }
+
+  .contact-item { display: flex; align-items: center; justify-content: space-between; background: var(--card);
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .contact-item a { color: var(--accent); text-decoration: none; font-size: 13px; }
+  .contact-add-row { display: flex; gap: 6px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="overlay" id="sidebar-overlay">
+    <aside id="sidebar">
+      <button id="new-chat-btn">+ New Chat</button>
+      <div id="session-list"></div>
+    </aside>
+  </div>
+
+  <div class="overlay" id="emergency-overlay">
+    <div class="modal">
+      <div class="modal-header"><span>🚨 Emergency First-Aid Guide</span><button class="close-btn" id="close-emergency">✕</button></div>
+      <p class="modal-note">This is general guidance. The first thing to do in any emergency: <strong>call emergency services immediately</strong> (Pakistan: Rescue 1122).</p>
+      <div id="em-list"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="checker-overlay">
+    <div class="modal small">
+      <div class="modal-header"><span>🔍 Symptom Checker</span><button class="close-btn" id="close-checker">✕</button></div>
+      <div id="checker-body"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="about-overlay">
+    <div class="modal small" style="text-align:center;">
+      <div class="modal-header"><span>Developer</span><button class="close-btn" id="close-about">✕</button></div>
+      <img src="developer.jpg" alt="Atif Hassan - Developer" style="width:140px;height:140px;object-fit:cover;border-radius:50%;border:2px solid var(--accent);margin:8px 0 14px;" />
+      <div style="font-weight:700;font-size:16px;">Atif Hassan</div>
+      <div style="color:var(--muted);font-size:13px;margin-top:4px;">🇵🇰 Pakistan · 18 years · CS Student (2nd Year)</div>
+      <p style="color:var(--muted);font-size:13px;line-height:1.6;margin-top:14px;">This Doctor AI app was built by Atif Hassan — to make health guidance easy and accessible for everyone.</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="settings-overlay">
+    <div class="modal">
+      <div class="modal-header"><span>⚙️ Settings</span><button class="close-btn" id="close-settings">✕</button></div>
+
+      <div class="settings-section">
+        <div class="settings-label">Your Name</div>
+        <input class="settings-input" id="username-input" placeholder="Enter your name (optional)" />
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">Theme</div>
+        <div class="theme-toggle">
+          <div class="theme-opt" id="theme-dark">🌙 Dark</div>
+          <div class="theme-opt" id="theme-light">☀️ Light</div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">Text Size</div>
+        <div class="theme-toggle">
+          <div class="theme-opt" id="size-sm">A Small</div>
+          <div class="theme-opt" id="size-md">A Medium</div>
+          <div class="theme-opt" id="size-lg">A Large</div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">Voice Language</div>
+        <select class="settings-input" id="voice-lang">
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="ur-PK">Urdu (Pakistan)</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="ar-SA">Arabic</option>
+        </select>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">🧠 Memory — What the AI remembers</div>
+        <p class="modal-note" style="margin-bottom:8px;">The AI will remember these facts to give you more personalized answers. Add them yourself, or say "remember that..." in the chat.</p>
+        <div id="memory-list"></div>
+        <div class="memory-add-row">
+          <input class="settings-input" id="memory-add-input" placeholder="e.g. I'm allergic to dust" />
+          <button class="small-btn" id="memory-add-btn">Add</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">Data</div>
+        <button class="danger-btn" id="export-chat-btn" style="border-color:var(--accent);color:var(--accent);margin-bottom:8px;">📄 Export Chat (.txt)</button>
+        <button class="danger-btn" id="clear-history-btn" style="margin-bottom:8px;">Delete All Chat History</button>
+        <button class="danger-btn" id="clear-memory-btn">Delete All Memory</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="tools-overlay">
+    <div class="modal">
+      <div class="modal-header"><span>🧰 Tools</span><button class="close-btn" id="close-tools">✕</button></div>
+      <div class="tools-grid">
+        <div class="tool-tile" data-tool="bmi"><span class="tool-icon">🧮</span><span class="tool-name">BMI Calculator</span></div>
+        <div class="tool-tile" data-tool="water"><span class="tool-icon">💧</span><span class="tool-name">Water Tracker</span></div>
+        <div class="tool-tile" data-tool="mood"><span class="tool-icon">🙂</span><span class="tool-name">Mood Check-in</span></div>
+        <div class="tool-tile" data-tool="breathe"><span class="tool-icon">🌬️</span><span class="tool-name">Breathing Exercise</span></div>
+        <div class="tool-tile" data-tool="hospital"><span class="tool-icon">🏥</span><span class="tool-name">Nearby Hospital</span></div>
+        <div class="tool-tile" data-tool="contacts"><span class="tool-icon">📇</span><span class="tool-name">Emergency Contacts</span></div>
+        <div class="tool-tile" data-tool="print"><span class="tool-icon">🖨️</span><span class="tool-name">Print Chat</span></div>
+        <div class="tool-tile" data-tool="share"><span class="tool-icon">🔗</span><span class="tool-name">Share App</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="bmi-overlay">
+    <div class="modal small">
+      <div class="modal-header"><span>🧮 BMI Calculator</span><button class="close-btn" id="close-bmi">✕</button></div>
+      <div class="calc-row"><input class="settings-input" id="bmi-weight" type="number" placeholder="Weight (kg)" /></div>
+      <div class="calc-row"><input class="settings-input" id="bmi-height" type="number" placeholder="Height (cm)" /></div>
+      <button class="small-btn" id="bmi-calc-btn" style="width:100%;">Calculate</button>
+      <div class="result-box" id="bmi-result" style="display:none;"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="water-overlay">
+    <div class="modal small" style="text-align:center;">
+      <div class="modal-header"><span>💧 Water Tracker</span><button class="close-btn" id="close-water">✕</button></div>
+      <p class="modal-note">Daily goal: 8 glasses. Click a glass each time you drink water.</p>
+      <div class="water-glasses" id="water-glasses"></div>
+      <div class="water-count" id="water-count"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="mood-overlay">
+    <div class="modal small">
+      <div class="modal-header"><span>🙂 Mood Check-in</span><button class="close-btn" id="close-mood">✕</button></div>
+      <p class="modal-note">How are you feeling today?</p>
+      <div class="mood-row" id="mood-row"></div>
+      <div class="settings-label">Previous Entries</div>
+      <div class="mood-log" id="mood-log"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="breathe-overlay">
+    <div class="modal small">
+      <div class="modal-header"><span>🌬️ Breathing Exercise</span><button class="close-btn" id="close-breathe">✕</button></div>
+      <div class="breathe-wrap">
+        <div class="breathe-circle"></div>
+        <p class="breathe-text">Breathe in and out with the circle — 4 seconds in, 4 seconds out. Continue for a few minutes until you feel relaxed.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="contacts-overlay">
+    <div class="modal small">
+      <div class="modal-header"><span>📇 Emergency Contacts</span><button class="close-btn" id="close-contacts">✕</button></div>
+      <div id="contacts-list"></div>
+      <div class="contact-add-row">
+        <input class="settings-input" id="contact-name" placeholder="Name" />
+        <input class="settings-input" id="contact-phone" placeholder="Number" />
+      </div>
+      <button class="small-btn" id="contact-add-btn" style="width:100%;margin-top:8px;">Add Contact</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <header>
+    <div class="header-left">
+      <button class="icon-btn" id="menu-btn">☰</button>
+      <span class="logo-dot"></span><span class="logo-text">Doctor AI</span>
+    </div>
+    <div class="header-right">
+      <button class="pill-btn checker-btn" id="open-checker">🔍 Symptom Checker</button>
+      <button class="pill-btn tools-btn" id="open-tools">🧰 Tools</button>
+      <button class="pill-btn emergency-btn" id="open-emergency">🚨 Emergency</button>
+      <button class="icon-btn" id="open-settings" title="Settings">⚙️</button>
+      <button class="icon-btn" id="open-about" title="About the developer">ℹ️</button>
+    </div>
+  </header>
+
+  <div id="chat-area">
+    <div class="tip-banner" id="tip-banner" style="display:none;">
+      <span>💡</span><span id="tip-text"></span>
+      <button class="tip-close" id="tip-close">✕</button>
+    </div>
+    <div class="chat-inner" id="chat-inner"></div>
+  </div>
+
+  <div id="input-bar">
+    <div class="input-inner">
+      <textarea id="msg-input" rows="1" placeholder="Type your question... (Press Enter to send)"></textarea>
+      <button class="round-btn" id="mic-btn" title="Voice se bolein">🎤</button>
+      <button class="round-btn" id="send-btn" disabled>➤</button>
+    </div>
+    <p class="disclaimer">This AI only gives general information, not medical advice. In an emergency, contact a doctor/hospital immediately.</p>
+  </div>
+</div>
+
+<script>
+const SYMPTOM_OPTIONS = ["Fever","Headache","Stomach pain","Cough","Sore throat","Body ache","Nausea/Vomiting","Other"];
+const DURATIONS = ["Started today","For 1-2 days","For 3-6 days","1 week or more"];
+const EMERGENCIES = [
+  { title: "Chest pain / Heart attack", steps: ["Call emergency services immediately (Pakistan: Rescue 1122).","Help the person sit comfortably, loosen tight clothing.","Don't leave them alone, stay with them until help arrives.","If they become unconscious and stop breathing, start CPR if trained."]},
+  { title: "Choking", steps: ["If they can still cough, let them cough — don't interfere.","If they can't cough or speak at all: stand behind them and give sharp upward abdominal thrusts (Heimlich maneuver).","Repeat 5 times, then 5 back blows between the shoulder blades, until the object comes out.","Call emergency services immediately if it continues."]},
+  { title: "Severe bleeding", steps: ["Press a clean cloth or bandage firmly on the wound.","Raise the injured area above heart level if possible.","Keep applying pressure, don't remove the cloth if it's stopping the bleeding.","Call emergency services immediately."]},
+  { title: "Burns", steps: ["Cool the burned area under cool (not icy) running water for 10-15 minutes.","Avoid applying ointments, creams, or ice until seen by a doctor.","Cover minor burns with a clean cloth.","For large burns or burns on the face/hands, go to hospital immediately."]},
+  { title: "Unconsciousness / Not breathing", steps: ["Call emergency services immediately.","Lay the person flat, keep their airway clear.","If they're not breathing and you're trained, start CPR.","Don't leave them alone until help arrives."]},
+];
+const DAILY_TIPS = [
+  "Drink at least 8 glasses of water a day — staying hydrated matters more than most people think.",
+  "7-8 hours of sleep keeps your immune system strong.",
+  "Add colorful vegetables and fruits to your meals — a great source of vitamins.",
+  "A 20-30 minute walk daily is great for heart health.",
+  "Rest your eyes every 20 minutes during screen time.",
+  "Cutting back on salt and processed food helps keep blood pressure in check.",
+  "Deep breathing or a little meditation can help lower stress.",
+];
+const QUICK_TOPICS = ["What should I do for a fever?","Tips for better sleep","Ways to reduce stress","What does a healthy diet look like?","How much water should I drink daily?"];
+const MOODS = ["😄","🙂","😐","😔","😢"];
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function welcomeMessage(){ return { id: uid(), role: "assistant", time: Date.now(),
+  text: "Hi! I'm Doctor AI 🩺 Ask me anything about your health. (Note: I can't recommend specific medicines or dosages — please always consult a doctor or pharmacist for that.)" }; }
+
+let sessions = JSON.parse(localStorage.getItem("doctor-ai-sessions") || "null");
+if (!sessions || !sessions.length) sessions = [{ id: uid(), title: "New conversation", updatedAt: Date.now(), messages: [welcomeMessage()] }];
+let currentId = sessions[0].id;
+let loading = false;
+let checkerData = { symptom: "", duration: "", severity: 5, notes: "" };
+let checkerStep = 0;
+let memory = JSON.parse(localStorage.getItem("doctor-ai-memory") || "[]");
+let userName = localStorage.getItem("doctor-ai-username") || "";
+let theme = localStorage.getItem("doctor-ai-theme") || "dark";
+let voiceLang = localStorage.getItem("doctor-ai-voice-lang") || "en-US";
+let fontScale = localStorage.getItem("doctor-ai-font-scale") || "100%";
+let waterCount = 0;
+let waterDate = localStorage.getItem("doctor-ai-water-date") || "";
+let moodLog = JSON.parse(localStorage.getItem("doctor-ai-mood-log") || "[]");
+let contacts = JSON.parse(localStorage.getItem("doctor-ai-contacts") || "[]");
+let ratings = JSON.parse(localStorage.getItem("doctor-ai-ratings") || "{}");
+
+document.documentElement.setAttribute("data-theme", theme);
+document.documentElement.style.setProperty("--font-scale", fontScale);
+
+const today = new Date().toDateString();
+if (waterDate !== today) { waterCount = 0; localStorage.setItem("doctor-ai-water-date", today); }
+else { waterCount = Number(localStorage.getItem("doctor-ai-water-count") || 0); }
+
+const chatInner = document.getElementById("chat-inner");
+const chatArea = document.getElementById("chat-area");
+const input = document.getElementById("msg-input");
+const sendBtn = document.getElementById("send-btn");
+const micBtn = document.getElementById("mic-btn");
+
+function saveSessions(){ localStorage.setItem("doctor-ai-sessions", JSON.stringify(sessions)); }
+function saveMemory(){ localStorage.setItem("doctor-ai-memory", JSON.stringify(memory)); }
+function currentSession(){ return sessions.find(s => s.id === currentId); }
+function openModal(id){ document.getElementById(id).classList.add("open"); }
+function closeModal(id){ document.getElementById(id).classList.remove("open"); }
+function wireClose(overlayId, closeBtnId){
+  document.getElementById(closeBtnId).addEventListener("click", () => closeModal(overlayId));
+  document.getElementById(overlayId).addEventListener("click", (e) => { if (e.target.id === overlayId) closeModal(overlayId); });
+}
+
+function showToast(text){
+  const t = document.getElementById("toast");
+  t.textContent = text; t.style.display = "block";
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => { t.style.display = "none"; }, 2600);
+}
+
+function tryAutoMemory(text){
+  const m = text.match(/(?:remember|yaad rakhna|yaad rakhiye|yaad rakho)(?: that| ke)?\s*(.+)/i);
+  if (m && m[1] && m[1].trim().length > 2){
+    const fact = m[1].trim().replace(/^ke\s+/i, "");
+    if (!memory.includes(fact)){ memory.push(fact); saveMemory(); renderMemory();
+      showToast("🧠 Memory saved: " + fact.slice(0, 40) + (fact.length > 40 ? "…" : "")); }
+  }
+}
+
+function formatTime(ts){ if (!ts) return ""; return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+
+function renderMessages(){
+  const msgs = currentSession().messages;
+  chatInner.innerHTML = "";
+  msgs.forEach((m, idx) => {
+    const row = document.createElement("div");
+    row.className = "row " + (m.role === "user" ? "user" : "assistant");
+    const bubble = document.createElement("div");
+    bubble.className = "bubble " + (m.role === "user" ? "bubble-user" : "bubble-assistant");
+    bubble.textContent = m.text;
+    row.appendChild(bubble);
+    const timeEl = document.createElement("div");
+    timeEl.className = "msg-time"; timeEl.textContent = formatTime(m.time);
+    row.appendChild(timeEl);
+
+    if (m.role === "assistant" && !loading){
+      const actions = document.createElement("div");
+      actions.className = "msg-actions";
+      const copyBtn = document.createElement("button");
+      copyBtn.textContent = "📋 Copy";
+      copyBtn.onclick = () => { navigator.clipboard.writeText(m.text); showToast("Copied ✅"); };
+      actions.appendChild(copyBtn);
+
+      const upBtn = document.createElement("button");
+      upBtn.textContent = "👍";
+      if (ratings[m.id] === "up") upBtn.classList.add("rated");
+      upBtn.onclick = () => { ratings[m.id] = ratings[m.id] === "up" ? null : "up"; localStorage.setItem("doctor-ai-ratings", JSON.stringify(ratings)); showToast("Thanks for the feedback 🙏"); renderMessages(); };
+      actions.appendChild(upBtn);
+
+      const downBtn = document.createElement("button");
+      downBtn.textContent = "👎";
+      if (ratings[m.id] === "down") downBtn.classList.add("rated");
+      downBtn.onclick = () => { ratings[m.id] = ratings[m.id] === "down" ? null : "down"; localStorage.setItem("doctor-ai-ratings", JSON.stringify(ratings)); showToast("Thanks for the feedback 🙏"); renderMessages(); };
+      actions.appendChild(downBtn);
+
+      if (idx === msgs.length - 1){
+        const regenBtn = document.createElement("button");
+        regenBtn.textContent = "🔄 Regenerate";
+        regenBtn.onclick = () => regenerateLast();
+        actions.appendChild(regenBtn);
+      }
+      row.appendChild(actions);
+    }
+    chatInner.appendChild(row);
+  });
+  if (loading){
+    const row = document.createElement("div"); row.className = "row assistant";
+    const bubble = document.createElement("div"); bubble.className = "bubble bubble-assistant";
+    bubble.innerHTML = '<span class="typing-dot" style="animation-delay:0s"></span><span class="typing-dot" style="animation-delay:.15s"></span><span class="typing-dot" style="animation-delay:.3s"></span>';
+    row.appendChild(bubble); chatInner.appendChild(row);
+  }
+  if (msgs.length === 1 && !loading){
+    const quickWrap = document.createElement("div"); quickWrap.className = "quick-topics";
+    QUICK_TOPICS.forEach(topic => {
+      const chip = document.createElement("span"); chip.className = "quick-topic"; chip.textContent = topic;
+      chip.onclick = () => sendMessage(topic); quickWrap.appendChild(chip);
+    });
+    chatInner.appendChild(quickWrap);
+  }
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function renderSessions(){
+  const list = document.getElementById("session-list"); list.innerHTML = "";
+  sessions.slice().sort((a,b)=>b.updatedAt-a.updatedAt).forEach(s => {
+    const item = document.createElement("div");
+    item.className = "session-item" + (s.id === currentId ? " active" : "");
+    item.textContent = s.title || "New conversation";
+    item.onclick = () => { currentId = s.id; renderMessages(); renderSessions(); closeModal("sidebar-overlay"); };
+    list.appendChild(item);
+  });
+}
+
+async function callApi(msgsForApi){
+  const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages: msgsForApi, memory, userName }) });
+  const data = await res.json();
+  return data.reply || "Sorry, couldn't get a response. Please try again.";
+}
+
+async function sendMessage(overrideText){
+  const text = (overrideText ?? input.value).trim();
+  if (!text || loading) return;
+  const session = currentSession();
+  session.messages.push({ id: uid(), role: "user", text, time: Date.now() });
+  if (session.messages.filter(m=>m.role==="user").length === 1) session.title = text.slice(0,32);
+  session.updatedAt = Date.now();
+  saveSessions(); renderSessions();
+  tryAutoMemory(text);
+  input.value = ""; input.style.height = "auto"; sendBtn.disabled = true;
+  loading = true; renderMessages();
+  try {
+    const reply = await callApi(session.messages.map(m => ({ role: m.role, text: m.text })));
+    session.messages.push({ id: uid(), role: "assistant", text: reply, time: Date.now() });
+  } catch (e) {
+    session.messages.push({ id: uid(), role: "assistant", text: "Sorry, there was a connection issue. Please try again.", time: Date.now() });
+  } finally {
+    loading = false; session.updatedAt = Date.now(); saveSessions(); renderMessages();
+  }
+}
+
+async function regenerateLast(){
+  if (loading) return;
+  const session = currentSession(); const msgs = session.messages;
+  if (msgs.length === 0 || msgs[msgs.length-1].role !== "assistant") return;
+  msgs.pop(); loading = true; renderMessages();
+  try {
+    const reply = await callApi(msgs.map(m => ({ role: m.role, text: m.text })));
+    msgs.push({ id: uid(), role: "assistant", text: reply, time: Date.now() });
+  } catch(e){ msgs.push({ id: uid(), role: "assistant", text: "Sorry, there was a connection issue.", time: Date.now() }); }
+  finally { loading = false; session.updatedAt = Date.now(); saveSessions(); renderMessages(); }
+}
+
+input.addEventListener("input", () => {
+  sendBtn.disabled = !input.value.trim();
+  input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 120) + "px";
+});
+input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+sendBtn.addEventListener("click", () => sendMessage());
+
+document.getElementById("new-chat-btn").addEventListener("click", () => {
+  const fresh = { id: uid(), title: "New conversation", updatedAt: Date.now(), messages: [welcomeMessage()] };
+  sessions.unshift(fresh); currentId = fresh.id; saveSessions();
+  renderMessages(); renderSessions(); closeModal("sidebar-overlay");
+});
+document.getElementById("menu-btn").addEventListener("click", () => openModal("sidebar-overlay"));
+document.getElementById("sidebar-overlay").addEventListener("click", (e) => { if (e.target.id === "sidebar-overlay") closeModal("sidebar-overlay"); });
+
+const emList = document.getElementById("em-list");
+EMERGENCIES.forEach(em => {
+  const card = document.createElement("div"); card.className = "em-card";
+  card.innerHTML = `<div class="em-title">${em.title}</div><ol class="em-steps">${em.steps.map(s=>`<li>${s}</li>`).join("")}</ol>`;
+  emList.appendChild(card);
+});
+document.getElementById("open-emergency").addEventListener("click", () => openModal("emergency-overlay"));
+wireClose("emergency-overlay", "close-emergency");
+
+function renderChecker(){
+  const body = document.getElementById("checker-body"); body.innerHTML = "";
+  if (checkerStep === 0){
+    body.innerHTML = '<p class="checker-label">What symptom are you experiencing?</p><div class="chip-wrap" id="symptom-chips"></div>';
+    const wrap = document.getElementById("symptom-chips");
+    SYMPTOM_OPTIONS.forEach(opt => {
+      const chip = document.createElement("span"); chip.className = "chip" + (checkerData.symptom === opt ? " active" : ""); chip.textContent = opt;
+      chip.onclick = () => { checkerData.symptom = opt; checkerStep = 1; renderChecker(); };
+      wrap.appendChild(chip);
+    });
+  } else if (checkerStep === 1){
+    body.innerHTML = '<p class="checker-label">How long has this been going on?</p><div class="chip-wrap" id="duration-chips"></div>';
+    const wrap = document.getElementById("duration-chips");
+    DURATIONS.forEach(opt => {
+      const chip = document.createElement("span"); chip.className = "chip" + (checkerData.duration === opt ? " active" : ""); chip.textContent = opt;
+      chip.onclick = () => { checkerData.duration = opt; checkerStep = 2; renderChecker(); };
+      wrap.appendChild(chip);
+    });
+  } else if (checkerStep === 2){
+    body.innerHTML = `<p class="checker-label">How severe is it? (<span id="sev-val">${checkerData.severity}</span>/10)</p>
+      <input type="range" min="1" max="10" value="${checkerData.severity}" id="sev-range" style="width:100%">
+      <p class="checker-label">Any other details? (optional)</p>
+      <textarea id="checker-notes" rows="3" placeholder="e.g. I'm also feeling nauseous..."></textarea>
+      <button id="checker-submit">Send</button>`;
+    document.getElementById("sev-range").addEventListener("input", (e) => { checkerData.severity = Number(e.target.value); document.getElementById("sev-val").textContent = checkerData.severity; });
+    document.getElementById("checker-notes").addEventListener("input", (e) => { checkerData.notes = e.target.value; });
+    document.getElementById("checker-submit").addEventListener("click", () => {
+      const composed = `From Symptom Checker:\n• Symptom: ${checkerData.symptom}\n• Duration: ${checkerData.duration}\n• Severity: ${checkerData.severity}/10${checkerData.notes ? `\n• Notes: ${checkerData.notes}` : ""}`;
+      closeModal("checker-overlay"); checkerStep = 0; checkerData = { symptom: "", duration: "", severity: 5, notes: "" };
+      sendMessage(composed);
+    });
+  }
+}
+document.getElementById("open-checker").addEventListener("click", () => { checkerStep = 0; renderChecker(); openModal("checker-overlay"); });
+wireClose("checker-overlay", "close-checker");
+
+document.getElementById("open-about").addEventListener("click", () => openModal("about-overlay"));
+wireClose("about-overlay", "close-about");
+
+function renderMemory(){
+  const list = document.getElementById("memory-list"); list.innerHTML = "";
+  if (memory.length === 0){ list.innerHTML = '<p class="modal-note">No memory saved yet.</p>'; return; }
+  memory.forEach((fact, i) => {
+    const item = document.createElement("div"); item.className = "memory-item";
+    item.innerHTML = `<span>${fact}</span>`;
+    const del = document.createElement("button"); del.textContent = "✕";
+    del.onclick = () => { memory.splice(i, 1); saveMemory(); renderMemory(); };
+    item.appendChild(del); list.appendChild(item);
+  });
+}
+function setTheme(t){
+  theme = t; localStorage.setItem("doctor-ai-theme", t); document.documentElement.setAttribute("data-theme", t);
+  document.getElementById("theme-dark").classList.toggle("active", t === "dark");
+  document.getElementById("theme-light").classList.toggle("active", t === "light");
+}
+function setFontScale(scale, id){
+  fontScale = scale; localStorage.setItem("doctor-ai-font-scale", scale);
+  document.documentElement.style.setProperty("--font-scale", scale);
+  ["size-sm","size-md","size-lg"].forEach(x => document.getElementById(x).classList.toggle("active", x === id));
+}
+document.getElementById("open-settings").addEventListener("click", () => {
+  document.getElementById("username-input").value = userName;
+  document.getElementById("voice-lang").value = voiceLang;
+  setTheme(theme);
+  const sizeId = fontScale === "87%" ? "size-sm" : fontScale === "115%" ? "size-lg" : "size-md";
+  setFontScale(fontScale, sizeId);
+  renderMemory(); openModal("settings-overlay");
+});
+wireClose("settings-overlay", "close-settings");
+document.getElementById("username-input").addEventListener("input", (e) => { userName = e.target.value; localStorage.setItem("doctor-ai-username", userName); });
+document.getElementById("voice-lang").addEventListener("change", (e) => { voiceLang = e.target.value; localStorage.setItem("doctor-ai-voice-lang", voiceLang); });
+document.getElementById("theme-dark").addEventListener("click", () => setTheme("dark"));
+document.getElementById("theme-light").addEventListener("click", () => setTheme("light"));
+document.getElementById("size-sm").addEventListener("click", () => setFontScale("87%", "size-sm"));
+document.getElementById("size-md").addEventListener("click", () => setFontScale("100%", "size-md"));
+document.getElementById("size-lg").addEventListener("click", () => setFontScale("115%", "size-lg"));
+document.getElementById("memory-add-btn").addEventListener("click", () => {
+  const inp = document.getElementById("memory-add-input"); const val = inp.value.trim();
+  if (val){ memory.push(val); saveMemory(); renderMemory(); inp.value = ""; showToast("🧠 Memory added"); }
+});
+document.getElementById("memory-add-input").addEventListener("keydown", (e) => { if (e.key === "Enter"){ document.getElementById("memory-add-btn").click(); } });
+document.getElementById("clear-history-btn").addEventListener("click", () => {
+  if (!confirm("Delete all chat history? This cannot be undone.")) return;
+  const fresh = { id: uid(), title: "New conversation", updatedAt: Date.now(), messages: [welcomeMessage()] };
+  sessions = [fresh]; currentId = fresh.id; saveSessions(); renderMessages(); renderSessions(); showToast("History deleted");
+});
+document.getElementById("clear-memory-btn").addEventListener("click", () => {
+  if (!confirm("Delete all memory?")) return;
+  memory = []; saveMemory(); renderMemory(); showToast("Memory deleted");
+});
+document.getElementById("export-chat-btn").addEventListener("click", () => {
+  const msgs = currentSession().messages;
+  const lines = msgs.map(m => `[${formatTime(m.time)}] ${m.role === "user" ? (userName || "Aap") : "Doctor AI"}: ${m.text}`);
+  const blob = new Blob([lines.join("\n\n")], { type: "text/plain" });
+  const url = URL.createObjectURL(blob); const a = document.createElement("a");
+  a.href = url; a.download = "doctor-ai-chat.txt"; a.click(); URL.revokeObjectURL(url);
+  showToast("Chat exported ✅");
+});
+
+(function initTip(){
+  const dismissedDate = localStorage.getItem("doctor-ai-tip-dismissed");
+  if (dismissedDate === today) return;
+  const dayIndex = new Date().getDate() % DAILY_TIPS.length;
+  document.getElementById("tip-text").textContent = DAILY_TIPS[dayIndex];
+  document.getElementById("tip-banner").style.display = "flex";
+})();
+document.getElementById("tip-close").addEventListener("click", () => {
+  document.getElementById("tip-banner").style.display = "none";
+  localStorage.setItem("doctor-ai-tip-dismissed", today);
+});
+
+// ===== Tools menu =====
+document.getElementById("open-tools").addEventListener("click", () => openModal("tools-overlay"));
+wireClose("tools-overlay", "close-tools");
+document.querySelectorAll(".tool-tile").forEach(tile => {
+  tile.addEventListener("click", () => {
+    closeModal("tools-overlay");
+    const tool = tile.dataset.tool;
+    if (tool === "bmi") openModal("bmi-overlay");
+    else if (tool === "water") { renderWater(); openModal("water-overlay"); }
+    else if (tool === "mood") { renderMood(); openModal("mood-overlay"); }
+    else if (tool === "breathe") openModal("breathe-overlay");
+    else if (tool === "hospital") findHospital();
+    else if (tool === "contacts") { renderContacts(); openModal("contacts-overlay"); }
+    else if (tool === "print") printChat();
+    else if (tool === "share") shareApp();
+  });
+});
+
+// BMI Calculator
+wireClose("bmi-overlay", "close-bmi");
+document.getElementById("bmi-calc-btn").addEventListener("click", () => {
+  const w = Number(document.getElementById("bmi-weight").value);
+  const h = Number(document.getElementById("bmi-height").value) / 100;
+  const box = document.getElementById("bmi-result");
+  if (!w || !h){ showToast("Please enter both weight and height"); return; }
+  const bmi = (w / (h * h)).toFixed(1);
+  let category = "";
+  if (bmi < 18.5) category = "Underweight";
+  else if (bmi < 25) category = "Normal";
+  else if (bmi < 30) category = "Overweight";
+  else category = "Obese";
+  box.style.display = "block";
+  box.innerHTML = `<div class="big">${bmi}</div><div style="margin-top:6px;color:var(--muted);font-size:13px;">${category}</div>`;
+});
+
+// Water Tracker
+function renderWater(){
+  const wrap = document.getElementById("water-glasses"); wrap.innerHTML = "";
+  for (let i = 1; i <= 8; i++){
+    const g = document.createElement("span"); g.className = "glass" + (i <= waterCount ? " filled" : ""); g.textContent = "🥛";
+    g.onclick = () => { waterCount = (i === waterCount) ? i - 1 : i; localStorage.setItem("doctor-ai-water-count", waterCount); renderWater(); };
+    wrap.appendChild(g);
+  }
+  document.getElementById("water-count").textContent = `${waterCount} / 8 glasses today`;
+}
+wireClose("water-overlay", "close-water");
+
+// Mood Check-in
+function renderMood(){
+  const row = document.getElementById("mood-row"); row.innerHTML = "";
+  MOODS.forEach(m => {
+    const opt = document.createElement("span"); opt.className = "mood-opt"; opt.textContent = m;
+    opt.onclick = () => {
+      moodLog.unshift({ mood: m, date: new Date().toLocaleString() });
+      moodLog = moodLog.slice(0, 20);
+      localStorage.setItem("doctor-ai-mood-log", JSON.stringify(moodLog));
+      renderMood(); showToast("Mood saved");
+    };
+    row.appendChild(opt);
+  });
+  const log = document.getElementById("mood-log"); log.innerHTML = "";
+  if (moodLog.length === 0){ log.innerHTML = '<p class="modal-note">No entries yet.</p>'; return; }
+  moodLog.forEach(e => {
+    const item = document.createElement("div"); item.className = "mood-log-item";
+    item.innerHTML = `<span>${e.mood}</span><span>${e.date}</span>`;
+    log.appendChild(item);
+  });
+}
+wireClose("mood-overlay", "close-mood");
+wireClose("breathe-overlay", "close-breathe");
+
+// Nearby Hospital
+function findHospital(){
+  if (!navigator.geolocation){ window.open("https://www.google.com/maps/search/hospital+near+me", "_blank"); return; }
+  showToast("Finding your location...");
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { window.open(`https://www.google.com/maps/search/hospital/@${pos.coords.latitude},${pos.coords.longitude},14z`, "_blank"); },
+    () => { window.open("https://www.google.com/maps/search/hospital+near+me", "_blank"); }
+  );
+}
+
+// Emergency Contacts
+function renderContacts(){
+  const list = document.getElementById("contacts-list"); list.innerHTML = "";
+  if (contacts.length === 0){ list.innerHTML = '<p class="modal-note">No contacts yet.</p>'; }
+  contacts.forEach((c, i) => {
+    const item = document.createElement("div"); item.className = "contact-item";
+    item.innerHTML = `<span>${c.name}</span>`;
+    const right = document.createElement("div");
+    const call = document.createElement("a"); call.href = `tel:${c.phone}`; call.textContent = "📞 " + c.phone;
+    right.appendChild(call);
+    const del = document.createElement("button"); del.textContent = " ✕"; del.style.background="transparent"; del.style.border="none"; del.style.color="var(--muted2)"; del.style.cursor="pointer";
+    del.onclick = () => { contacts.splice(i,1); localStorage.setItem("doctor-ai-contacts", JSON.stringify(contacts)); renderContacts(); };
+    right.appendChild(del);
+    item.appendChild(right);
+    list.appendChild(item);
+  });
+}
+document.getElementById("contact-add-btn").addEventListener("click", () => {
+  const name = document.getElementById("contact-name").value.trim();
+  const phone = document.getElementById("contact-phone").value.trim();
+  if (!name || !phone){ showToast("Please enter both name and number"); return; }
+  contacts.push({ name, phone }); localStorage.setItem("doctor-ai-contacts", JSON.stringify(contacts));
+  document.getElementById("contact-name").value = ""; document.getElementById("contact-phone").value = "";
+  renderContacts(); showToast("Contact added");
+});
+wireClose("contacts-overlay", "close-contacts");
+
+// Print & Share
+function printChat(){ window.print(); }
+function shareApp(){
+  const url = window.location.href;
+  if (navigator.share){ navigator.share({ title: "Doctor AI", url }).catch(()=>{}); }
+  else { navigator.clipboard.writeText(url); showToast("Link copied ✅"); }
+}
+
+// Voice input
+let recognition = null, listening = false;
+micBtn.addEventListener("click", async () => {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition){
+    showToast("⚠️ Voice input isn't supported in this browser. Try Chrome or Edge.");
+    return;
+  }
+  if (!window.isSecureContext){
+    showToast("⚠️ Voice input needs a secure (https) site — it won't work when opened as a local file.");
+    return;
+  }
+  if (listening){ recognition.stop(); return; }
+
+  // Explicitly request mic permission first so failures are clear to the user
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+    }
+  } catch (permErr) {
+    showToast("⚠️ Microphone permission denied. Please allow mic access in your browser settings.");
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = voiceLang;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.onresult = (e) => {
+    input.value = (input.value ? input.value + " " : "") + e.results[0][0].transcript;
+    sendBtn.disabled = !input.value.trim();
+  };
+  recognition.onend = () => { listening = false; micBtn.classList.remove("active"); };
+  recognition.onerror = (e) => {
+    listening = false; micBtn.classList.remove("active");
+    const messages = {
+      "no-speech": "Didn't catch that — no speech detected. Try again.",
+      "not-allowed": "Microphone permission denied. Please allow mic access in your browser settings.",
+      "audio-capture": "No microphone found. Please check your device.",
+      "network": "Network issue with voice recognition. Check your connection.",
+      "language-not-supported": "That voice language isn't supported. Try switching it in Settings.",
+    };
+    showToast("⚠️ " + (messages[e.error] || ("Voice error: " + e.error)));
+  };
+  try {
+    recognition.start();
+    listening = true;
+    micBtn.classList.add("active");
+  } catch (startErr) {
+    showToast("⚠️ Couldn't start voice input. Please try again.");
+  }
+});
+
+renderMessages();
+renderSessions();
+</script>
+</body>
+</html>
